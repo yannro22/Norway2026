@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Norway Trip Pro</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0a1128">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --bg-color: #0a1128;
+            --panel-bg: #162447; 
+            --accent-color: #e0e1dd;
+            --text-color: #f5f5f5;
+            --border-color: #1f4068;
+            --norway-red: #ba0c2f;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0; padding: 20px;
+            display: flex; gap: 20px;
+            height: 100vh; box-sizing: border-box;
+        }
+        .sidebar { flex: 1; background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); overflow-y: auto; max-width: 350px; }
+        .main-content { flex: 3; background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); overflow-y: auto; display: flex; flex-direction: column; }
+        .timeline { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-top: 15px; }
+        .day-card { background: #1e3157; border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; }
+        .day-title { font-weight: bold; color: var(--accent-color); border-bottom: 1px solid var(--norway-red); margin-bottom: 10px; }
+        select, textarea { background: #0a1128; color: var(--text-color); border: 1px solid var(--border-color); padding: 6px; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        textarea { height: 60px; font-size: 12px; margin-top: 5px; }
+        .checkbox-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        .checkbox-item { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
+        input[type="checkbox"] { accent-color: var(--norway-red); width: 18px; height: 18px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 15px; }
+        .tab-btn { background: #0a1128; color: var(--text-color); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+        .tab-btn.active { background: var(--norway-red); color: white; border-color: var(--norway-red); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        #map { height: 450px; width: 100%; border-radius: 8px; }
+        
+        /* Weather Widget Style */
+        .weather-box {
+            background: linear-gradient(135deg, #1f4068 0%, #162447 100%);
+            padding: 15px; border-radius: 8px; margin-bottom: 20px;
+            border-left: 4px solid #4fc3f7;
+        }
+        .weather-temp { font-size: 24px; font-weight: bold; }
+        .weather-desc { font-size: 14px; text-transform: capitalize; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div id="weather-container" class="weather-box">
+            <div style="font-size: 12px; color: #4fc3f7; margin-bottom: 5px;">LIVE WEATHER (OSLO)</div>
+            <div id="weather-info">Loading...</div>
+        </div>
+
+        <h3>Packing List</h3>
+        <div class="checkbox-group" id="packing-list">
+            <!-- Items added via JS for persistence -->
+        </div>
+    </div>
+
+    <div class="main-content">
+        <header style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--norway-red); padding-bottom: 10px; margin-bottom: 15px;">
+            <h2 style="margin: 0;">🇳🇴 Norway Trip Planner</h2>
+            <div id="countdown-timer" style="font-family: monospace; color: var(--accent-color);">00d 00h 00m</div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('timeline')">🗓️ Timeline</button>
+            <button class="tab-btn" onclick="switchTab('map')">🗺️ Map & Routes</button>
+        </div>
+
+        <div id="timeline-tab" class="tab-content active">
+            <div class="timeline" id="timeline-container"></div>
+        </div>
+
+        <div id="map-tab" class="tab-content">
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <select id="route-start" onchange="updateWeather()"></select>
+                <select id="route-end"></select>
+                <button class="tab-btn" style="background: var(--norway-red);" onclick="calculateDrivingRoute()">Go</button>
+            </div>
+            <div id="route-results" style="padding: 10px; font-size: 13px; color: #ccc;"></div>
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script>
+        const locations = {
+            "Oslo": [59.9139, 10.7522], "Andalsnes": [62.5674, 7.6872], "Geiranger": [62.1015, 7.2059],
+            "Lillehammer": [61.1153, 10.4662], "Stryn": [61.9045, 6.7230], "Loen": [61.8715, 6.8488],
+            "Bergen": [60.3913, 5.3221], "Flam": [60.8608, 7.1118], "Trollstigen": [62.4531, 7.6690]
+        };
+
+        const packingItems = [
+            "7x Underwear", "7x Socks", "Waterproof Raincoat", "Warm Jacket (Puffer)", 
+            "Trail Shoes", "Power Bank", "Passport", "Travel Adapter"
+        ];
+
+        // 1. PERSISTENCE ENGINE (Save/Load)
+        function saveAppData() {
+            const data = {
+                notes: Array.from(document.querySelectorAll('textarea')).map(t => t.value),
+                regions: Array.from(document.querySelectorAll('.day-card select')).map(s => s.value),
+                checks: Array.from(document.querySelectorAll('#packing-list input')).map(c => c.checked),
+                startLoc: document.getElementById('route-start').value
+            };
+            localStorage.setItem('norway_trip_planner_data', JSON.stringify(data));
+        }
+
+        function loadAppData() {
+            const saved = JSON.parse(localStorage.getItem('norway_trip_planner_data'));
+            if (!saved) return;
+            
+            document.querySelectorAll('textarea').forEach((t, i) => t.value = saved.notes[i] || "");
+            document.querySelectorAll('.day-card select').forEach((s, i) => s.value = saved.regions[i] || "arrival");
+            document.querySelectorAll('#packing-list input').forEach((c, i) => c.checked = saved.checks[i] || false);
+            if(saved.startLoc) document.getElementById('route-start').value = saved.startLoc;
+        }
+
+        // 2. WEATHER ENGINE (Met.no API)
+        async function updateWeather() {
+            const locName = document.getElementById('route-start').value || "Oslo";
+            const [lat, lon] = locations[locName];
+            const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`;
+            
+            document.getElementById('weather-info').innerHTML = "Updating...";
+            
+            try {
+                const response = await fetch(url, { headers: { 'User-Agent': 'NorwayPlannerApp' } });
+                const data = await response.json();
+                const current = data.properties.timeseries[0].data.instant.details;
+                const symbol = data.properties.timeseries[0].data.next_1_hours.summary.symbol_code;
+                
+                document.getElementById('weather-container').querySelector('div').innerText = `LIVE WEATHER (${locName.toUpperCase()})`;
+                document.getElementById('weather-info').innerHTML = `
+                    <div class="weather-temp">${Math.round(current.air_temperature)}°C</div>
+                    <div class="weather-desc">${symbol.replace('_', ' ')}</div>
+                    <div style="font-size:11px; margin-top:5px;">💨 ${current.wind_speed} m/s | 💧 ${current.relative_humidity}%</div>
+                `;
+            } catch (e) {
+                document.getElementById('weather-info').innerHTML = "Weather unavailable offline.";
+            }
+        }
+
+        // 3. INITIALIZE INTERFACE
+        function init() {
+            // Build Timeline
+            const container = document.getElementById('timeline-container');
+            const startDate = new Date(2026, 5, 12);
+            for (let i = 1; i <= 9; i++) {
+                const d = new Date(startDate); d.setDate(startDate.getDate() + (i-1));
+                const card = document.createElement('div');
+                card.className = 'day-card';
+                card.innerHTML = `
+                    <div class="day-title">${d.getDate()} Jun (Day ${i})</div>
+                    <select onchange="saveAppData()">
+                        <option value="arrival">Arrival/Transit</option>
+                        <option value="fjords">Fjords</option>
+                        <option value="mountains">Mountains</option>
+                    </select>
+                    <textarea placeholder="Notes..." oninput="saveAppData()"></textarea>
+                `;
+                container.appendChild(card);
+            }
+
+            // Build Packing List
+            const packContainer = document.getElementById('packing-list');
+            packingItems.forEach(item => {
+                const label = document.createElement('label');
+                label.className = 'checkbox-item';
+                label.innerHTML = `<input type="checkbox" onchange="saveAppData()"> ${item}`;
+                packContainer.appendChild(label);
+            });
+
+            // Build Selects
+            Object.keys(locations).forEach(name => {
+                const opt1 = new Option(name, name);
+                const opt2 = new Option(name, name);
+                document.getElementById('route-start').add(opt1);
+                document.getElementById('route-end').add(opt2);
+            });
+
+            loadAppData();
+            updateWeather();
+        }
+
+        // Standard Map & Tab Switch Logic
+        const map = L.map('map').setView([61.5, 8.5], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        Object.entries(locations).forEach(([name, coords]) => L.marker(coords).addTo(map).bindPopup(name));
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+            event.currentTarget.classList.add('active');
+            if(tab === 'map') setTimeout(() => map.invalidateSize(), 200);
+        }
+
+        // Timer
+        setInterval(() => {
+            const dist = new Date("2026-06-12T06:50:00") - new Date();
+            const d = Math.floor(dist / 86400000);
+            const h = Math.floor((dist % 86400000) / 3600000);
+            const m = Math.floor((dist % 3600000) / 60000);
+            document.getElementById('countdown-timer').innerText = `${d}d ${h}h ${m}m`;
+        }, 1000);
+
+        init();
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js');
+        }
+    </script>
+</body>
+</html>
