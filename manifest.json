@@ -1,0 +1,17 @@
+{
+  "name": "Norway Trip Pro",
+  "short_name": "NorwayTrip",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0a1128",
+  "theme_color": "#ba0c2f",
+  "description": "Professional Norway Trip Planner with Weather and Offline Maps",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/197/197579.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
