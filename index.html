@@ -194,31 +194,56 @@
             "Flam": { coords: [60.8608, 7.1118], icon: "🛖" },
             "Loen": { coords: [61.8715, 6.8488], icon: "🛖" },
             "Trollstigen": { coords: [62.4531, 7.6690], icon: "⛰️" },
-            "Bjorgi (Lake)": { coords: [60.6200, 6.4200], icon: "🏝️" },
-            "Sognefjord": { coords: [61.1187, 6.4251], icon: "🌊" }
+            "Bjorgi (Lake)": { coords: [60.6200, 6.4200], icon: "💧" },
+            "Sognefjord": { coords: [61.1187, 6.4251], icon: "⛰️" },
+            "Lofthus": { coords: [60.3283, 6.6560], icon: "🛖" },
+            "Romsdalseggen": { coords: [62.5482, 7.7471], icon: "⛰️" },
+            "Ornesvingen": { coords: [62.1264, 7.1685], icon: "⛰️" },
+            "Aurlandsvangen": { coords: [60.9056, 7.1895], icon: "🛖" },
+            "Vaga": { coords: [61.8752, 9.0984], icon: "🛖" }
         };
 
         const packingItems = [
             "7x Underwear", "7x Socks", "Waterproof Raincoat", "Warm Puffer Jacket", 
-            "Warm Hat/Gloves", "Trail Shoes", "Power Bank", "Passport", "Water Bottle"
+            "1x Jumper/Fleece/Hoodie", "1x Trousers", "4x Shorts", "Trail Shoes", 
+            "City Shoes", "Snacks", "Verdell and Clarence", "Pen & Paper", 
+            "Cards / Cabo", "Power Bank", "Passport", "Water Bottle"
         ];
 
-        // PERSISTENCE
+        // UPDATED PERSISTENCE FOR ACCOMMODATION
         function save() {
             const data = {
                 checks: Array.from(document.querySelectorAll('#packing-container input')).map(c => c.checked),
                 notes: Array.from(document.querySelectorAll('#timeline-container textarea')).map(t => t.value),
-                regions: Array.from(document.querySelectorAll('#timeline-container select')).map(s => s.value)
+                sleep: Array.from(document.querySelectorAll('#timeline-container .sleep-box')).map(s => s.value)
             };
-            localStorage.setItem('norway_pro_v2', JSON.stringify(data));
+            localStorage.setItem('norway_pro_v3', JSON.stringify(data));
         }
 
         function load() {
-            const saved = JSON.parse(localStorage.getItem('norway_pro_v2'));
+            const saved = JSON.parse(localStorage.getItem('norway_pro_v3'));
             if (!saved) return;
             document.querySelectorAll('#packing-container input').forEach((c, i) => c.checked = saved.checks[i]);
             document.querySelectorAll('#timeline-container textarea').forEach((t, i) => t.value = saved.notes[i]);
-            document.querySelectorAll('#timeline-container select').forEach((s, i) => s.value = saved.regions[i]);
+            document.querySelectorAll('#timeline-container .sleep-box').forEach((s, i) => s.value = saved.sleep[i] || "");
+        }
+
+        // UPDATED SCHEDULE LOOP
+        // (Inside your init function)
+        const sc = document.getElementById('timeline-container');
+        for(let i=1; i<=9; i++) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="day-header"><span>Day ${i}</span> <span>June ${11+i}</span></div>
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size:11px; color:#aaa;">💤 ACCOMMODATION:</label>
+                    <input type="text" class="sleep-box" oninput="save()" placeholder="Where are we sleeping?">
+                </div>
+                <label style="font-size:11px; color:#aaa;">📝 ACTIVITIES:</label>
+                <textarea oninput="save()" placeholder="Daily activities..."></textarea>
+            `;
+            sc.appendChild(card);
         }
 
         // TABS
@@ -239,18 +264,26 @@
             display.innerHTML = "Fetching...";
 
             try {
-                // met.no requires a unique User-Agent
                 const response = await fetch(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${coords[0]}&lon=${coords[1]}`);
                 const data = await response.json();
                 const now = data.properties.timeseries[0].data.instant.details;
-                const symbol = data.properties.timeseries[0].data.next_1_hours.summary.symbol_code;
+                const nextHour = data.properties.timeseries[0].data.next_1_hours;
+                
+                const temp = Math.round(now.air_temperature);
+                const rain = nextHour.details.precipitation_amount;
+                const description = nextHour.summary.symbol_code.replace(/_/g, ' ');
+                
+                // Create the weather sentence
+                const sentence = `The weather in ${city} is currently ${description} with a temperature of ${temp}°C.`;
 
                 display.innerHTML = `
-                    <h1 style="margin:0; font-size:48px;">${Math.round(now.air_temperature)}°</h1>
-                    <p style="text-transform: capitalize; color: #aaa; margin-bottom:20px;">${symbol.replace(/_/g, ' ')}</p>
+                    <h1 style="margin:0; font-size:48px;">${temp}°</h1>
+                    <p style="padding: 0 20px; line-height: 1.4; color: #e0e1dd; margin-bottom:20px;">${sentence}</p>
                     <div class="weather-grid">
+                        <div class="weather-stat"><strong>Rain</strong><br>${rain} mm</div>
                         <div class="weather-stat"><strong>Wind</strong><br>${now.wind_speed} m/s</div>
                         <div class="weather-stat"><strong>Humidity</strong><br>${now.relative_humidity}%</div>
+                        <div class="weather-stat"><strong>Air Press.</strong><br>${Math.round(now.air_pressure_at_sea_level)} hPa</div>
                     </div>
                 `;
             } catch (e) {
